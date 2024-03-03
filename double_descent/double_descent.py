@@ -36,6 +36,8 @@ def save_pdf(file_name):
 boundary_figsize = (6.0, 6.0 * 3 / 4)
 charts_figsize = (12.0, 5.0)
 
+test_set_size = 50000
+
 
 def save_object(filename, obj):
     with open(filename, 'wb') as output:
@@ -275,20 +277,20 @@ class MyNet:
 
     def mse_loss(self, data: tuple[np.ndarray, np.ndarray]) -> None:
         x, y = data
+        # compute mse as L = 1/N * sum_i ||s_i - y_i||^2
         s = self.score(x)
         return np.mean((s - y) ** 2)
 
 # %%
 
 
-def sample_and_train(G: G2Model, N: int, D: int, N_test: int = 50000) -> tuple[float, float, float, float]:
+def sample_and_train(G: G2Model, N: int, D: int) -> tuple[float, float, float, float]:
     train_data = G.generate_sample(N)
-    test_data = G.generate_sample(50000)
 
     net = MyNet(2, D)
     net.train(train_data)
 
-    return net, train_data, test_data
+    return net, train_data
 
 
 def errors(G: G2Model, net: MyNet, train_data: tuple[np.ndarray, np.ndarray], test_data: tuple[np.ndarray, np.ndarray]) -> tuple[float, float, float, float]:
@@ -307,7 +309,7 @@ def task1_boundaries():
     os.makedirs(folder_name, exist_ok=True)
 
     N = 40
-    Ds = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+    Ds = [10, 20, 30, 40, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
 
     G = G2Model()
 
@@ -315,7 +317,11 @@ def task1_boundaries():
         # set the random seed for every D to get the same results as on the website
         np.random.seed(seed=1)
 
-        net, train_data, test_data = sample_and_train(G, N, D)
+        train_data = G.generate_sample(N)
+        test_data = G.generate_sample(test_set_size)
+        net = MyNet(2, D)
+        net.train(train_data)
+
         train_error, test_error, _, _ = errors(G, net, train_data, test_data)
 
         G.plot_boundary(train_data, net, train_error=train_error, test_error=test_error)
@@ -345,8 +351,10 @@ def task1_variable_training_size():
         test_errors = []
         test_losses = []
 
-        for t in range(trials):
-            net, train_data, test_data = sample_and_train(G, N, D)
+        test_data = G.generate_sample(test_set_size)
+
+        for _ in range(trials):
+            net, train_data = sample_and_train(G, N, D)
             _, test_error, _, test_mse = errors(G, net, train_data, test_data)
 
             test_errors.append(test_error)
@@ -395,9 +403,11 @@ def task2_variable_hidden_size():
         train_losses = []
         test_losses = []
 
+        test_data = G.generate_sample(test_set_size)
+
         for _ in range(trials):
 
-            net, train_data, test_data = sample_and_train(G, N, D)
+            net, train_data = sample_and_train(G, N, D)
             train_error, test_error, train_mse, test_mse = errors(G, net, train_data, test_data)
 
             # compute loss and error
@@ -437,6 +447,6 @@ def task2_variable_hidden_size():
 if __name__ == "__main__":
     task1_boundaries()
 
-    task1_variable_training_size()
+    # task1_variable_training_size()
 
-    task2_variable_hidden_size()
+    # task2_variable_hidden_size()
