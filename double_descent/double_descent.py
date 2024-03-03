@@ -1,6 +1,5 @@
 # %%
 import scipy.stats
-# from typing import Tuple
 
 import math
 import numpy as np
@@ -8,14 +7,13 @@ import numpy as np
 import pickle
 
 import os
-# import sys
 
-# """ matplotlib drawing to a pdf setup """
+""" matplotlib drawing to a pdf setup """
 # import matplotlib
 
 # matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-#!%matplotlib inline
+# !%matplotlib inline
 
 
 class dotdict(dict):
@@ -35,7 +33,8 @@ def save_pdf(file_name):
     plt.savefig(file_name, bbox_inches='tight', dpi=199)
 
 
-figsize = (6.0, 6.0 * 3 / 4)
+boundary_figsize = (6.0, 6.0 * 3 / 4)
+charts_figsize = (12.0, 5.0)
 
 
 def save_object(filename, obj):
@@ -142,7 +141,7 @@ class G2Model:
         """
         x, y = train_data
         #
-        plt.figure(2, figsize=figsize)
+        plt.figure(2, figsize=boundary_figsize)
         plt.rc('lines', linewidth=1)
         # plot points
         mask0 = y == -1
@@ -226,18 +225,25 @@ class MyNet:
         self.hidden_size = hidden_size
         self.name = f'test-net-{hidden_size}'
         self.lifting = Lifting(input_size, hidden_size)
+        self.theta = None
+
+    def extend_one(self, x):
+        return np.hstack([x, np.ones((x.shape[0], 1))])
 
     def score(self, x: np.array) -> np.array:
         """
         :param x: np.array [N x d], N number of points, d dimensionality of the input features
         :return: s: np.array [N] predicted scores of class 1 for all points
         """
+        # lift the data to D dimensions
+        # psi = tanh(W0*x + b0)
         psi = self.lifting(x)
-        N = x.shape[0]
-        psi = np.hstack([psi, np.ones((N, 1))])
 
-        s = psi @ self.theta
-        return s
+        # linear layer
+        # add one dimension to psi for the bias
+        psi = self.extend_one(psi)
+        # compute w^T * psi + b = theta^T * [psi, 1]
+        return psi @ self.theta
 
     def classify(self, x: np.array) -> np.array:
         """
@@ -248,7 +254,7 @@ class MyNet:
         """
         return np.sign(self.score(x))
 
-    def train(self, train_data: tuple[np.ndarray, np.ndarray], lambda_reg: float = 10e-6):
+    def train(self, train_data: tuple[np.ndarray, np.ndarray], lambda_reg: float = 10e-6) -> None:
         """
         Train the model on the provided data
         *
@@ -257,92 +263,100 @@ class MyNet:
         x, y = train_data
 
         # lift the data to D dimensions
-        x = self.lifting(x)
+        psi = self.lifting(x)
 
         # compute psi matrix which is [N x D+1]
-        N = x.shape[0]
         D = self.hidden_size
-        psi = np.hstack([x, np.ones((N, 1))])
+        psi = self.extend_one(psi)
 
         # compute weights minimizing MSE
         # (psi^T * psi + lambda * I)^-1 * psi^T * y
         self.theta = np.linalg.inv(psi.T @ psi + lambda_reg * np.eye(D + 1)) @ psi.T @ y
 
+    def mse_loss(self, data: tuple[np.ndarray, np.ndarray]) -> None:
+        x, y = data
+        s = self.score(x)
+        return np.mean((s - y) ** 2)
 
 # %%
 
-def experiment(hidden_size: int, train_data_size: int, output_file: str = None) -> tuple[float, float]:
-    np.random.seed(seed=1)
-    G = G2Model()
-    train_data = G.generate_sample(train_data_size)
+
+def sample_and_train(G: G2Model, N: int, D: int, N_test: int = 50000) -> tuple[float, float, float, float]:
+    train_data = G.generate_sample(N)
     test_data = G.generate_sample(50000)
-    net = MyNet(2, hidden_size)
+
+    net = MyNet(2, D)
     net.train(train_data)
+
+    return net, train_data, test_data
+
+
+def errors(G: G2Model, net: MyNet, train_data: tuple[np.ndarray, np.ndarray], test_data: tuple[np.ndarray, np.ndarray]) -> tuple[float, float, float, float]:
     train_error = G.test_error(net, train_data)
     test_error = G.test_error(net, test_data)
+    train_mse = net.mse_loss(train_data)
+    test_mse = net.mse_loss(test_data)
 
-    if output_file is not None:
-        G.plot_boundary(train_data, net, train_error=train_error, test_error=test_error)
-        plt.draw()
-        save_pdf(f'{output_file}.png')
-        plt.cla()
-
-    return train_error, test_error
+    return train_error, test_error, train_mse, test_mse
 
 # %%
 
 
-def boundary():
+def task1_boundaries():
     folder_name = 'boundary'
     os.makedirs(folder_name, exist_ok=True)
 
-    train_data_size = 40
-    Ds = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000]
+    N = 40
+    Ds = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+
+    G = G2Model()
+
     for D in Ds:
-        train_error, test_error = experiment(D, train_data_size, f'{folder_name}/{D}')
-        print(f'Hidden size: {D}')
-        print(f'Train error: {train_error*100}%')
-        print(f'Test error: {test_error*100}%')
+        # set the random seed for every D to get the same results as on the website
+        np.random.seed(seed=1)
+
+        net, train_data, test_data = sample_and_train(G, N, D)
+        train_error, test_error, _, _ = errors(G, net, train_data, test_data)
+
+        G.plot_boundary(train_data, net, train_error=train_error, test_error=test_error)
+        plt.draw()
+        save_pdf(f'{folder_name}/{D}.png')
+        plt.cla()
+
 
 # %%
 
 
-def variable_training_size():
-    np.random.seed(seed=1)
+def task1_variable_training_size():
     folder_name = 'training_size'
     os.makedirs(folder_name, exist_ok=True)
 
-    D = 40
+    D = 40  # fixed hidden dimension
     trials = 100
     G = G2Model()
+
+    # list [2, 4, 6, ..., 100]
+    Ns = list(range(2, 101, 2))
 
     avg_errors = []
     avg_losses = []
 
-    Ns = list(range(2, 101, 2))
     for N in Ns:
-        print(N, flush=True)
-
         test_errors = []
         test_losses = []
-        for _ in range(trials):
-            # generate new training data and lifting
-            train_data = G.generate_sample(N)
-            test_data = G.generate_sample(50000)
-            net = MyNet(2, D)
 
-            # train the network
-            net.train(train_data)
+        for t in range(trials):
+            net, train_data, test_data = sample_and_train(G, N, D)
+            _, test_error, _, test_mse = errors(G, net, train_data, test_data)
 
-            # compute loss and error
-            test_losses.append(np.mean((net.score(test_data[0]) - test_data[1]) ** 2))
-            test_errors.append(G.test_error(net, test_data))
+            test_errors.append(test_error)
+            test_losses.append(test_mse)
 
-        avg_errors.append(np.mean(np.array(test_errors)))
-        avg_losses.append(np.mean(np.array(test_losses)))
+        avg_errors.append(np.mean(test_errors))
+        avg_losses.append(np.mean(test_losses))
 
     # plot the results
-    plt.figure(1, figsize=(10.0, 5.0))
+    plt.figure(1, figsize=charts_figsize)
 
     plt.plot(Ns, avg_errors, marker='d', color='r')
     plt.yscale('log')
@@ -360,8 +374,7 @@ def variable_training_size():
 
 
 # %%
-def variable_hidden_size():
-    np.random.seed(seed=1)
+def task2_variable_hidden_size():
     folder_name = 'hidden_size'
     os.makedirs(folder_name, exist_ok=True)
 
@@ -374,10 +387,9 @@ def variable_hidden_size():
     avg_train_losses = []
     avg_test_losses = []
 
+    # list [1, 10, 20, ..., 200]
     Ds = [1] + list(range(10, 210, 10))
     for D in Ds:
-        print(D, flush=True)
-
         train_errors = []
         test_errors = []
         train_losses = []
@@ -385,19 +397,14 @@ def variable_hidden_size():
 
         for _ in range(trials):
 
-            # generate new training data and lifting
-            train_data = G.generate_sample(N)
-            test_data = G.generate_sample(50000)
-            net = MyNet(2, D)
-
-            # train the network
-            net.train(train_data)
+            net, train_data, test_data = sample_and_train(G, N, D)
+            train_error, test_error, train_mse, test_mse = errors(G, net, train_data, test_data)
 
             # compute loss and error
-            train_losses.append(np.mean((net.score(train_data[0]) - train_data[1]) ** 2))
-            test_losses.append(np.mean((net.score(test_data[0]) - test_data[1]) ** 2))
-            train_errors.append(G.test_error(net, train_data))
-            test_errors.append(G.test_error(net, test_data))
+            train_errors.append(train_error)
+            train_losses.append(train_mse)
+            test_errors.append(test_error)
+            test_losses.append(test_mse)
 
         avg_train_errors.append(np.mean(np.array(train_errors)))
         avg_test_errors.append(np.mean(np.array(test_errors)))
@@ -405,7 +412,7 @@ def variable_hidden_size():
         avg_test_losses.append(np.mean(np.array(test_losses)))
 
     # plot the results
-    plt.figure(1, figsize=(10.0, 5.0))
+    plt.figure(1, figsize=charts_figsize)
 
     plt.plot(Ds, avg_test_errors, marker='d', color='r')
     plt.plot(Ds, avg_train_errors, marker='o', color='b')
@@ -428,8 +435,8 @@ def variable_hidden_size():
 
 
 if __name__ == "__main__":
-    boundary()
+    task1_boundaries()
 
-    variable_training_size()
+    task1_variable_training_size()
 
-    variable_hidden_size()
+    task2_variable_hidden_size()
