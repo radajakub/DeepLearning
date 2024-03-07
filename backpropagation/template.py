@@ -1,8 +1,5 @@
-from scipy.stats import norm
-from scipy.special import expit
-from scipy.stats import special_ortho_group
+# %%
 import scipy.stats
-from typing import Tuple
 
 import math
 import numpy as np
@@ -10,13 +7,13 @@ import numpy as np
 import pickle
 
 import os
-import sys
 
 """ matplotlib drawing to a pdf setup """
-import matplotlib
+# import matplotlib
 
-matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+# !%matplotlib inline
 
 
 class dotdict(dict):
@@ -33,10 +30,13 @@ class dotdict(dict):
 
 
 def save_pdf(file_name):
-    plt.savefig(file_name, bbox_inches='tight', dpi=199, pad_inches=0)
+    plt.savefig(file_name, bbox_inches='tight', dpi=199)
 
 
-figsize = (6.0, 6.0 * 3 / 4)
+boundary_figsize = (6.0, 6.0 * 3 / 4)
+charts_figsize = (12.0, 5.0)
+
+test_set_size = 50000
 
 
 def save_object(filename, obj):
@@ -54,7 +54,6 @@ def load_object(filename):
 
 class G2Model:
     def __init__(self):
-        np.random.seed(seed=1)
         self.K = 3  # mixture components
         self.priors = [0.5, 0.5]
         self.cls = [dotdict(), dotdict()]
@@ -93,7 +92,7 @@ class G2Model:
 
     def score_class(self, c, x: np.array) -> np.array:
         """
-            Compute score (log probability) for data x and class c
+            Compute log probability for data x and class c (sometimes also called score for the multinomial model)
             x: [N x d]
             return score : [N]
         """
@@ -107,6 +106,8 @@ class G2Model:
         return score
 
     def score(self, x: np.array) -> np.array:
+        """ Return log odds (logits) of predictive probability p(y|x) of the network
+        """
         scores = [self.score_class(c, x) for c in range(2)]
         score = scores[1] - scores[0]
         return score
@@ -132,7 +133,7 @@ class G2Model:
         err_rate = (y1 != y).sum() / x.shape[0]
         return err_rate
 
-    def plot_boundary(self, train_data, predictor=None):
+    def plot_boundary(self, train_data, predictor=None, train_error=None, test_error=None):
         """
         Visualizes the GT model, training points and the decisison boundary of a given predictor
         :param train_data: tuple (x,y)
@@ -142,7 +143,7 @@ class G2Model:
         """
         x, y = train_data
         #
-        plt.figure(2, figsize=figsize)
+        plt.figure(2, figsize=boundary_figsize)
         plt.rc('lines', linewidth=1)
         # plot points
         mask0 = y == -1
@@ -158,35 +159,64 @@ class G2Model:
         X = np.stack([Xi.flatten(), Yi.flatten()], axis=1)  # 200*200 x 2
         # Plot the GT scores contour
         score = self.score(X).reshape(ngrid)
-        m1 = np.linspace(0, score.max(), 4)
-        m2 = np.linspace(score.min(), 0, 4)
+        # m1 = np.linspace(0, score.max(), 4)
+        # m2 = np.linspace(score.min(), 0, 4)
         # plt.contour(Xi, Yi, score, np.sort(np.concatenate((m1[1:], m2[0:-1]))), linewidths=0.5) # intermediate contour lines of the score
         CS = plt.contour(Xi, Yi, score, [0], colors='r', linestyles='dashed')
-        l = dict()
-        h,_ = CS.legend_elements()
-        l[h[0]] = 'GT boundary'
+        # CS.collections[0].set_label('Bayes optimal')
+        # l = dict()
+        h, _ = CS.legend_elements()
+        H = [h[0]]
+        L = ["Bayes optimal"]
+        # l[h[0]] = 'GT boundary'
         # CS.collections[0].set_label('GT boundary')
         # Plot Predictor's decision boundary
         if predictor is not None:
             score = predictor.score(X).reshape(ngrid)
             CS = plt.contour(Xi, Yi, score, [0], colors='k', linewidths=1)
+            h, _ = CS.legend_elements()
+            H += [h[0]]
+            L += ["Predictor"]
             # CS.collections[0].set_label('Predictor boundary')
-            h,_ = CS.legend_elements()
-            l[h[0]] = 'Predictor boundary'
+            # h,_ = CS.legend_elements()
+            # l[h[0]] = 'GT boundary'
             y1 = predictor.classify(x)
             err = y1 != y
             h = plt.plot(x[err, 0], x[err, 1], 'ko', ms=6, fillstyle='none', label='errors', markeredgewidth=0.5)
-            l[h[0]] = 'Errors'
-            name = predictor.name
-        else:
-            name = self.name
+            # l[h[0]] = 'Errors'
+            H += [h[0]]
+            L += ["errors"]
         plt.xlabel("x0")
         plt.ylabel("x1")
-        plt.text(0.3, 1.0, name, ha='center', va='top', transform=plt.gca().transAxes)
+        # plt.text(0.3, 1.0, predictor.name, ha='center', va='top', transform=plt.gca().transAxes)
         # plt.legend(loc=0)
-        plt.legend(l.keys(), l.values(), loc=0)
-        save_pdf(f'{name}.png')
-        plt.clf()
+        # plt.legend(l.keys(), l.values(), loc=0)
+        plt.legend(H, L, loc=0)
+
+        title = f'N={train_data[0].shape[0]}'
+        if predictor is not None:
+            title += f', D={predictor.hidden_size}'
+        if train_error is not None:
+            title += f', train error: {train_error*100:.3f}%'
+        if test_error is not None:
+            title += f', test error: {test_error*100:.3f}%'
+        plt.title(title)
+
+# %%
+
+
+class Lifting:
+    def __init__(self, input_size, hidden_size):
+        self.W1 = (np.random.rand(hidden_size, input_size) * 2 - 1)
+        self.W1 /= np.linalg.norm(self.W1, axis=1).reshape(hidden_size, 1)
+        self.b1 = (np.random.rand(hidden_size) * 2 - 1) * 2
+
+    def __call__(self, x):
+        """
+        input: x [N x 2] data points
+        output: [N x hidden_size]
+        """
+        return np.tanh((x @ self.W1.T + self.b1[np.newaxis, :])*5)
 
 
 class MyNet:
@@ -194,17 +224,28 @@ class MyNet:
 
     def __init__(self, input_size, hidden_size):
         # name is needed for printing
+        self.hidden_size = hidden_size
         self.name = f'test-net-{hidden_size}'
+        self.lifting = Lifting(input_size, hidden_size)
+        self.theta = None
+
+    def extend_one(self, x):
+        return np.hstack([x, np.ones((x.shape[0], 1))])
 
     def score(self, x: np.array) -> np.array:
         """
-        Return log odds (logits) of predictive probability p(y|x) of the network
-        *
         :param x: np.array [N x d], N number of points, d dimensionality of the input features
         :return: s: np.array [N] predicted scores of class 1 for all points
         """
-        s = 2 * x[:, 0] + 3 * x[:, 1]
-        return s
+        # lift the data to D dimensions
+        # psi = tanh(W0*x + b0)
+        psi = self.lifting(x)
+
+        # linear layer
+        # add one dimension to psi for the bias
+        psi = self.extend_one(psi)
+        # compute w^T * psi + b = theta^T * [psi, 1]
+        return psi @ self.theta
 
     def classify(self, x: np.array) -> np.array:
         """
@@ -215,27 +256,197 @@ class MyNet:
         """
         return np.sign(self.score(x))
 
-    def train(self, train_data):
+    def train(self, train_data: tuple[np.ndarray, np.ndarray], lambda_reg: float = 10e-6) -> None:
         """
         Train the model on the provided data
         *
         :param train_data: tuple (x,y) of trianing data arrays: x[N x 2], y[Y]
         """
+        x, y = train_data
+
+        # lift the data to D dimensions
+        psi = self.lifting(x)
+
+        # compute psi matrix which is [N x D+1]
+        D = self.hidden_size
+        psi = self.extend_one(psi)
+
+        # compute weights minimizing MSE
+        # (psi^T * psi + lambda * I)^-1 * psi^T * y
+        self.theta = np.linalg.inv(psi.T @ psi + lambda_reg * np.eye(D + 1)) @ psi.T @ y
+
+    def mse_loss(self, data: tuple[np.ndarray, np.ndarray]) -> None:
+        x, y = data
+        # compute mse as L = 1/N * sum_i ||s_i - y_i||^2
+        s = self.score(x)
+        return np.mean((s - y) ** 2)
+
+# %%
+
+
+def sample_and_train(G: G2Model, N: int, D: int) -> tuple[float, float, float, float]:
+    train_data = G.generate_sample(N)
+
+    net = MyNet(2, D)
+    net.train(train_data)
+
+    return net, train_data
+
+
+def errors(G: G2Model, net: MyNet, train_data: tuple[np.ndarray, np.ndarray], test_data: tuple[np.ndarray, np.ndarray]) -> tuple[float, float, float, float]:
+    train_error = G.test_error(net, train_data)
+    test_error = G.test_error(net, test_data)
+    train_mse = net.mse_loss(train_data)
+    test_mse = net.mse_loss(test_data)
+
+    return train_error, test_error, train_mse, test_mse
+
+# %%
+
+
+def task1_boundaries():
+    folder_name = 'boundary'
+    os.makedirs(folder_name, exist_ok=True)
+
+    N = 40
+    Ds = [10, 20, 30, 40, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+
+    G = G2Model()
+
+    for D in Ds:
+        # set the random seed for every D to get the same results as on the website
+        np.random.seed(seed=1)
+
+        train_data = G.generate_sample(N)
+        test_data = G.generate_sample(test_set_size)
+        net = MyNet(2, D)
+        net.train(train_data)
+
+        train_error, test_error, _, _ = errors(G, net, train_data, test_data)
+
+        G.plot_boundary(train_data, net, train_error=train_error, test_error=test_error)
+        plt.draw()
+        save_pdf(f'{folder_name}/{D}.png')
+        plt.cla()
+
+
+# %%
+
+
+def task1_variable_training_size():
+    folder_name = 'training_size'
+    os.makedirs(folder_name, exist_ok=True)
+
+    D = 40  # fixed hidden dimension
+    trials = 100
+    G = G2Model()
+
+    # list [2, 4, 6, ..., 100]
+    Ns = list(range(2, 101, 2))
+
+    avg_errors = []
+    avg_losses = []
+
+    for N in Ns:
+        test_errors = []
+        test_losses = []
+
+        test_data = G.generate_sample(test_set_size)
+
+        for _ in range(trials):
+            net, train_data = sample_and_train(G, N, D)
+            _, test_error, _, test_mse = errors(G, net, train_data, test_data)
+
+            test_errors.append(test_error)
+            test_losses.append(test_mse)
+
+        avg_errors.append(np.mean(test_errors))
+        avg_losses.append(np.mean(test_losses))
+
+    # plot the results
+    plt.figure(1, figsize=charts_figsize)
+
+    plt.plot(Ns, avg_errors, marker='d', color='r')
+    plt.yscale('log')
+    plt.legend(['Test error'], loc=0)
+    plt.draw()
+    save_pdf(f'{folder_name}/test_error.png')
+    plt.cla()
+
+    plt.plot(Ns, avg_losses, marker='d', color='r')
+    plt.yscale('log')
+    plt.legend(['Test loss'], loc=0)
+    plt.draw()
+    save_pdf(f'{folder_name}/test_loss.png')
+    plt.cla()
+
+
+# %%
+def task2_variable_hidden_size():
+    folder_name = 'hidden_size'
+    os.makedirs(folder_name, exist_ok=True)
+
+    N = 40
+    trials = 100
+    G = G2Model()
+
+    avg_train_errors = []
+    avg_test_errors = []
+    avg_train_losses = []
+    avg_test_losses = []
+
+    # list [1, 10, 20, ..., 200]
+    Ds = [1] + list(range(10, 210, 10))
+    for D in Ds:
+        train_errors = []
+        test_errors = []
+        train_losses = []
+        test_losses = []
+
+        test_data = G.generate_sample(test_set_size)
+
+        for _ in range(trials):
+
+            net, train_data = sample_and_train(G, N, D)
+            train_error, test_error, train_mse, test_mse = errors(G, net, train_data, test_data)
+
+            # compute loss and error
+            train_errors.append(train_error)
+            train_losses.append(train_mse)
+            test_errors.append(test_error)
+            test_losses.append(test_mse)
+
+        avg_train_errors.append(np.mean(np.array(train_errors)))
+        avg_test_errors.append(np.mean(np.array(test_errors)))
+        avg_train_losses.append(np.mean(np.array(train_losses)))
+        avg_test_losses.append(np.mean(np.array(test_losses)))
+
+    # plot the results
+    plt.figure(1, figsize=charts_figsize)
+
+    plt.plot(Ds, avg_test_errors, marker='d', color='r')
+    plt.plot(Ds, avg_train_errors, marker='o', color='b')
+    plt.yscale('log')
+    plt.legend(['Test error', 'Train error'], loc=0)
+    plt.draw()
+    save_pdf(f'{folder_name}/errors.png')
+    plt.cla()
+
+    plt.plot(Ds, avg_test_losses, marker='d', color='r')
+    plt.plot(Ds, avg_train_losses, marker='o', color='b')
+    plt.yscale('log')
+    plt.legend(['Test loss', 'Train loss'], loc=0)
+    plt.draw()
+    save_pdf(f'{folder_name}/losses.png')
+    plt.cla()
+
+
+# %%
 
 
 if __name__ == "__main__":
+    task1_boundaries()
 
-    import matplotlib
-    print('matplotlib: {}'.format(matplotlib.__version__))
+    # task1_variable_training_size()
 
-    # test simulated data and plotting
-    G = G2Model()
-    train_data = G.generate_sample(40)
-    test_data = G.generate_sample(50000)
-    G.plot_boundary(train_data)
-    # task 
-    net = MyNet(2, 10)
-    net.train(train_data)
-    G.plot_boundary(train_data, net)
-    err = G.test_error(net, test_data)
-    print(f'Test error: {err*100}%')
+    # task2_variable_hidden_size()
