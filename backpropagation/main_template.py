@@ -2,8 +2,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from model import FFModel
-from template import *
+from toy_model import *
+from model_template import FFModel
 import math
 
 import matplotlib
@@ -66,6 +66,10 @@ xv, tv = generate_data(vsmpl_size)
 # model
 model = FFModel(hdim, device, dtype)
 
+# Plot predictor at initialization
+pred = Predictor(name, model)
+gmx.plot_boundary((x.cpu().numpy(), t.cpu().numpy()), pred)
+
 #%% Gradient check
 niterations = 1000
 log_period = 10
@@ -91,7 +95,7 @@ for count in range(niterations):
 #%% 
 # Plot predictor
 pred = Predictor(name, model)
-gmx.plot_boundary((x, t), pred)
+gmx.plot_boundary((x.cpu().numpy(), t.cpu().numpy()), pred)
 
 #%% 
 # Test
