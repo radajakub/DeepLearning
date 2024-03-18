@@ -67,9 +67,9 @@ def loss(w):
     b = torch.tensor(3.0)
     a = x + b
     y = torch.exp(w)
-    l = (y-a)**2
+    l = (y - a)**2
     # y/=2
-    del y, a, x, b, w
+    del y, x, b, w
     return l
 
 
