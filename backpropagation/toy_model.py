@@ -1,21 +1,16 @@
-# %% 
+# %%
 import scipy.stats
-from typing import Tuple
 
 import math
 import numpy as np
 
 import pickle
 
-import os
-import sys
-
 """ matplotlib drawing to a pdf setup """
 import matplotlib
 
-#matplotlib.use('Agg')
+# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-#!%matplotlib inline
 
 
 class dotdict(dict):
@@ -107,7 +102,7 @@ class G2Model:
 
     def score(self, x: np.array) -> np.array:
         """ Return log odds (logits) of predictive probability p(y|x) of the network
-	"""
+        """
         scores = [self.score_class(c, x) for c in range(2)]
         score = scores[1] - scores[0]
         return score
@@ -159,93 +154,44 @@ class G2Model:
         X = np.stack([Xi.flatten(), Yi.flatten()], axis=1)  # 200*200 x 2
         # Plot the GT scores contour
         score = self.score(X).reshape(ngrid)
-        m1 = np.linspace(0, score.max(), 4)
-        m2 = np.linspace(score.min(), 0, 4)
+        # m1 = np.linspace(0, score.max(), 4)
+        # m2 = np.linspace(score.min(), 0, 4)
         # plt.contour(Xi, Yi, score, np.sort(np.concatenate((m1[1:], m2[0:-1]))), linewidths=0.5) # intermediate contour lines of the score
         CS = plt.contour(Xi, Yi, score, [0], colors='r', linestyles='dashed')
         # CS.collections[0].set_label('Bayes optimal')
-        #l = dict()
-        h,_ = CS.legend_elements()
+        # l = dict()
+        h, _ = CS.legend_elements()
         H = [h[0]]
         L = ["Bayes optimal"]
-        #l[h[0]] = 'GT boundary'
+        # l[h[0]] = 'GT boundary'
         # CS.collections[0].set_label('GT boundary')
         # Plot Predictor's decision boundary
         if predictor is not None:
             score = predictor.score(X).reshape(ngrid)
             CS = plt.contour(Xi, Yi, score, [0], colors='k', linewidths=1)
-            h,_ = CS.legend_elements()
+            h, _ = CS.legend_elements()
             H += [h[0]]
             L += ["Predictor"]
             # CS.collections[0].set_label('Predictor boundary')
-            #h,_ = CS.legend_elements()
-            #l[h[0]] = 'GT boundary'
+            # h,_ = CS.legend_elements()
+            # l[h[0]] = 'GT boundary'
             y1 = predictor.classify(x)
             err = y1 != y
             h = plt.plot(x[err, 0], x[err, 1], 'ko', ms=6, fillstyle='none', label='errors', markeredgewidth=0.5)
-            #l[h[0]] = 'Errors'
+            # l[h[0]] = 'Errors'
             H += [h[0]]
             L += ["errors"]
         plt.xlabel("x0")
         plt.ylabel("x1")
         # plt.text(0.3, 1.0, name, ha='center', va='top', transform=plt.gca().transAxes)
         # plt.legend(loc=0)
-        #plt.legend(l.keys(), l.values(), loc=0)
+        # plt.legend(l.keys(), l.values(), loc=0)
         plt.legend(H, L, loc=0)
 
 # %%
 
-class Lifting:
-    def __init__(self, input_size, hidden_size):
-        self.W1 = (np.random.rand(hidden_size, input_size) * 2 - 1)
-        self.W1 /= np.linalg.norm(self.W1, axis=1).reshape(hidden_size, 1)
-        self.b1 = (np.random.rand(hidden_size) * 2 - 1) * 2
-
-    def __call__(self, x):
-        """
-        input: x [N x 2] data points
-        output: [N x hidden_size]
-        """
-        return np.tanh((x @ self.W1.T + self.b1[np.newaxis, :])*5)
-
-
-class MyNet:
-    """ Template example for the network """
-
-    def __init__(self, input_size, hidden_size):
-        # name is needed for printing
-        self.name = f'test-net-{hidden_size}'
-        self.lifting = Lifting(input_size, hidden_size)
-
-    def score(self, x: np.array) -> np.array:
-        """
-        :param x: np.array [N x d], N number of points, d dimensionality of the input features
-        :return: s: np.array [N] predicted scores of class 1 for all points
-        """
-        s = self.lifting(x).sum(axis=-1)
-        return s
-
-    def classify(self, x: np.array) -> np.array:
-        """
-        Make class prediction for the given gata
-        *
-        :param x: np.array [N x d], N number of points, d dimensionality of the input features
-        :return: y: np.array [N] class 0 or 1 per input point
-        """
-        return np.sign(self.score(x))
-
-    def train(self, train_data):
-        """
-        Train the model on the provided data
-        *
-        :param train_data: tuple (x,y) of trianing data arrays: x[N x 2], y[Y]
-        """
-
-# %%
 
 if __name__ == "__main__":
-
-    import matplotlib
     print('matplotlib: {}'.format(matplotlib.__version__))
 
     # test simulated data and plotting
@@ -253,14 +199,3 @@ if __name__ == "__main__":
     train_data = G.generate_sample(40)
     test_data = G.generate_sample(50000)
     G.plot_boundary(train_data)
-    # task 
-    net = MyNet(2, 10)
-    net.train(train_data)
-    G.plot_boundary(train_data, net)
-    plt.draw()
-    save_pdf(f'MyNet.png')
-    err = G.test_error(net, test_data)
-    print(f'Test error: {err*100}%')
-    
-
-# %%
