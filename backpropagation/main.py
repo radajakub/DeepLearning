@@ -132,6 +132,12 @@ def train(hidden_size, learning_rate=0.1, activation=torch.tanh, epochs=1000, lo
     terr = 1 - tacc
     print(f'test error on {tsmpl_size} samples: {terr:.4f}', flush=True)
 
+    training_error = 1 - model.mean_accuracy(x, t)
+    print(f'training error {training_error:.4f}', flush=True)
+
+    generalization_gap = abs(training_error - terr)
+    print(f'generalization gap: {generalization_gap:.4f}', flush=True)
+
     pred = Predictor(name, model)
     plt.clf()
     gmx.plot_boundary((x.cpu().numpy(), t.cpu().numpy()), pred, title=name)
