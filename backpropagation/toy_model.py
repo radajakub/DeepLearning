@@ -21,9 +21,11 @@ class dotdict(dict):
     __delattr__ = dict.__delitem__
 
     # these are needed for deepcopy / pickle
-    def __getstate__(self): return self.__dict__
+    def __getstate__(self):
+        return self.__dict__
 
-    def __setstate__(self, d): self.__dict__.update(d)
+    def __setstate__(self, d):
+        self.__dict__.update(d)
 
 
 def save_pdf(file_name):
@@ -128,7 +130,7 @@ class G2Model:
         err_rate = (y1 != y).sum() / x.shape[0]
         return err_rate
 
-    def plot_boundary(self, train_data, predictor=None):
+    def plot_boundary(self, train_data, predictor=None, title=None):
         """
         Visualizes the GT model, training points and the decisison boundary of a given predictor
         :param train_data: tuple (x,y)
@@ -187,6 +189,8 @@ class G2Model:
         # plt.legend(loc=0)
         # plt.legend(l.keys(), l.values(), loc=0)
         plt.legend(H, L, loc=0)
+        if title is not None:
+            plt.title(title)
 
 # %%
 
