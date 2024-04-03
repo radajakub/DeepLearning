@@ -1,0 +1,26 @@
+mean: tensor([0.7739, 0.7576, 0.7179])
+std: tensor([0.2972, 0.2968, 0.3353])
+training dataset size: 236
+testing dataset size: 2108
+
+validation ratio 0.3
+
+best validation accuracy: 0.8714285492897034
+best learning rate: 0.003
+best stopping epoch: 41
+
+test accuracy: 0.8254269361495972
+test loss: 1325.8967094852123
+
+transform = transforms.Compose([
+    transforms.RandomHorizontalFlip(p=0.1),
+    transforms.RandomAffine(10),
+    transforms.RandomCrop(200),
+    # transforms.RandomPerspective(p=0.2),
+    transforms.RandomAdjustSharpness(2, p=0.1),
+    # transforms.ColorJitter(hue=0.3, brightness=0.2),
+    transforms.RandomGrayscale(p=0.1),
+    # transforms.RandomInvert(p=0.1),
+])
+
+###########
