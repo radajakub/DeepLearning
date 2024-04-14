@@ -1,0 +1,11 @@
+original data
+initial loss is 0.8132926225662231
+it should be around 0.6931471805599453
+
+normalized data
+initial loss is 0.7375971078872681
+it should be around 0.6931471805599453
+
+multiplied data
+initial loss is 0.6986705660820007
+it should be around 0.6931471805599453
