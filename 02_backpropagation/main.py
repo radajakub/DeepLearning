@@ -207,7 +207,7 @@ def bernstein(errors: np.array, alpha: float):
     logs = (np.log(2) - np.log(1 - alpha))
     A = m
     B = - logs * (2 / 3) * 1
-    C = - logs * 2 * np.power(np.var(errors), 2)
+    C = - logs * 2 * np.var(errors)
     D = np.sqrt(np.power(B, 2) - 4 * A * C)
     t1 = (-B + D) / (2 * A)
     t2 = (-B - D) / (2 * A)
